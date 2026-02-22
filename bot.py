@@ -138,6 +138,12 @@ def get_summary(year: int, month: int, detailed: bool = False, compare: bool = F
         except:
             return 0.0
 
+    def fmt(val):
+        """Format currency: drop .00, keep .50 etc."""
+        if val == int(val):
+            return f"{int(val):,}"
+        return f"{val:,.2f}"
+
     SKIP = {"DESCRIPTION", "TOTAL", "SUMMARY", "TYPE", "PLANNED", "ACTUAL", ""}
 
     def fetch_actuals(y, m):
@@ -213,20 +219,20 @@ def get_summary(year: int, month: int, detailed: bool = False, compare: bool = F
                 return ""
             d = curr - prev
             arrow = "🔺" if d > 0 else "🔻"
-            return f" {arrow} ${abs(d):,.2f}"
+            return f" {arrow} ${fmt(abs(d))}"
 
         lines = [f"📊 *{month_label}*\n"]
         for t in TYPES:
             amt = type_actuals.get(t, 0.0)
             suffix = diff_str(amt, prev_type_actuals.get(t, 0.0)) if compare else ""
-            lines.append(f"{t}: *${amt:,.2f}*{suffix}")
+            lines.append(f"{t}: *${fmt(amt)}*{suffix}")
 
         prev_total_exp = sum(prev_type_actuals.get(t, 0.0) for t in expense_types)
         exp_suffix = diff_str(total_expenses, prev_total_exp) if compare else ""
-        lines.append(f"\n💸 Total Expenses: *${total_expenses:,.2f}*{exp_suffix}")
+        lines.append(f"\n💸 Total Expenses: *${fmt(total_expenses)}*{exp_suffix}")
         if income > 0:
             bal_emoji = "✅" if balance >= 0 else "⚠️"
-            lines.append(f"{bal_emoji} Balance: *${balance:,.2f}*")
+            lines.append(f"{bal_emoji} Balance: *${fmt(balance)}*")
         if compare:
             lines.append(f"\n_🔺 higher than {prev_label} | 🔻 lower_")
         lines.append(f"\n_Use /summary full for breakdown_")
@@ -246,25 +252,25 @@ def get_summary(year: int, month: int, detailed: bool = False, compare: bool = F
             return ""
         d = curr - prev
         arrow = "🔺" if d > 0 else "🔻"
-        return f" {arrow} ${abs(d):,.2f}"
+        return f" {arrow} ${fmt(abs(d))}"
 
     title_suffix = f" vs {prev_label}" if compare else " — Detailed"
     lines = [f"📊 *{month_label}{title_suffix}*"]
     for t in TYPES:
         total = type_actuals.get(t, 0.0)
         type_suffix = diff_str(total, prev_type_actuals.get(t, 0.0)) if compare else ""
-        lines.append(f"\n*{t}*: ${total:,.2f}{type_suffix}")
+        lines.append(f"\n*{t}*: ${fmt(total)}{type_suffix}")
         for cat, amt in cat_map.get(t, []):
             if amt != 0 or (compare and prev_cat_actuals.get(cat, 0.0) != 0):
                 cat_suffix = diff_str(amt, prev_cat_actuals.get(cat, 0.0)) if compare else ""
-                lines.append(f"  • {cat}: ${amt:,.2f}{cat_suffix}")
+                lines.append(f"  • {cat}: ${fmt(amt)}{cat_suffix}")
 
     prev_total_exp = sum(prev_type_actuals.get(t, 0.0) for t in expense_types)
     exp_suffix = diff_str(total_expenses, prev_total_exp) if compare else ""
-    lines.append(f"\n💸 *Total Expenses: ${total_expenses:,.2f}*{exp_suffix}")
+    lines.append(f"\n💸 *Total Expenses: ${fmt(total_expenses)}*{exp_suffix}")
     if income > 0:
         bal_emoji = "✅" if balance >= 0 else "⚠️"
-        lines.append(f"{bal_emoji} *Balance: ${balance:,.2f}*")
+        lines.append(f"{bal_emoji} *Balance: ${fmt(balance)}*")
     if compare:
         lines.append(f"\n_🔺 higher than {prev_label} | 🔻 lower_")
     logger.info("✅ Detailed summary built")
