@@ -229,7 +229,7 @@ def get_summary(year: int, month: int, detailed: bool = False, compare: bool = F
             lines.append(f"{bal_emoji} Balance: *${balance:,.2f}*")
         if compare:
             lines.append(f"\n_🔺 higher than {prev_label} | 🔻 lower_")
-        lines.append(f"\n_Use /summary full_ for breakdown")
+        lines.append(f"\n_Use /summary full for breakdown_")
         return "\n".join(lines)
 
     # Detailed summary — build cat_map from already-fetched cat_actuals
@@ -483,7 +483,8 @@ async def free_text_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Failed to write to Google Sheets.")
 
 # ── Main ──────────────────────────────────────────────────────────────────────
-async def main():
+def build_app():
+    """Build and return the Application with all handlers registered."""
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     app = Application.builder().token(token).build()
 
@@ -502,17 +503,62 @@ async def main():
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("summary", summary_cmd))
     app.add_handler(CommandHandler("categories", categories_cmd))
-    app.add_handler(CommandHandler("cancel", cancel_outside))  # outside conversation
+    app.add_handler(CommandHandler("cancel", cancel_outside))
     app.add_handler(conv_handler)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, free_text_handler))
+    return app
 
-    logger.info("Budget bot running...")
+
+# ── Webhook mode (Render / cloud) ─────────────────────────────────────────────
+async def run_webhook(app):
+    webhook_url = os.environ["WEBHOOK_URL"]  # e.g. https://your-app.onrender.com
+    port = int(os.environ.get("PORT", 8443))
+    logger.info(f"🌐 Webhook mode — url={webhook_url}, port={port}")
     async with app:
         await app.start()
-        await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-        await asyncio.Event().wait()  # run forever until SIGINT/SIGTERM
+        await app.updater.start_webhook(
+            listen="0.0.0.0",
+            port=port,
+            url_path="/webhook",
+            webhook_url=f"{webhook_url}/webhook",
+            allowed_updates=Update.ALL_TYPES,
+        )
+        await asyncio.Event().wait()
         await app.updater.stop()
         await app.stop()
 
+
+# ── Polling mode (local dev) ───────────────────────────────────────────────────
+async def run_polling(app):
+    import time
+    logger.info("💻 Polling mode (local dev)")
+    logger.info("⚠️  Make sure Render (or any other instance) is SUSPENDED before running locally.")
+    logger.info("    Render dashboard → your service → 'Suspend Service'")
+
+    async with app:
+        await app.initialize()
+
+        # Delete webhook and wait a moment to let any other polling instance time out
+        await app.bot.delete_webhook(drop_pending_updates=True)
+        logger.info("✅ Webhook cleared. Waiting 5s for other instances to time out...")
+        await asyncio.sleep(5)
+
+        await app.start()
+        await app.updater.start_polling(
+            allowed_updates=Update.ALL_TYPES,
+            error_callback=lambda e: logger.error(f"Polling error: {e}")
+        )
+        logger.info("✅ Polling started successfully.")
+        await asyncio.Event().wait()
+        await app.updater.stop()
+        await app.stop()
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    application = build_app()
+    # Use webhook when WEBHOOK_URL env var is set (i.e. on Render),
+    # otherwise fall back to polling (local development).
+    if os.environ.get("WEBHOOK_URL"):
+        asyncio.run(run_webhook(application))
+    else:
+        asyncio.run(run_polling(application))
