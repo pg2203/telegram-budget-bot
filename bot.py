@@ -46,7 +46,7 @@ CATEGORY_TO_TYPE = {
 ALL_CATEGORIES = list(CATEGORY_TO_TYPE.keys())
 TYPES = list(CATEGORIES.keys())
 
-CHOOSE_TYPE, CHOOSE_CATEGORY, ENTER_AMOUNT, ENTER_DETAILS = range(4)
+CHOOSE_TYPE, CHOOSE_CATEGORY, ENTER_AMOUNT, ENTER_DETAILS, ENTER_DATE = range(5)
 
 # ── Google Sheets ─────────────────────────────────────────────────────────────
 SCOPES = [
@@ -381,10 +381,33 @@ async def summary_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Couldn't fetch summary.")
 
 # ── Guided /add conversation ──────────────────────────────────────────────────
+def parse_date_input(text: str):
+    """Parse user date input. Accepts: today, yesterday, DD/MM, DD/MM/YYYY, YYYY-MM-DD."""
+    text = text.strip().lower()
+    today = datetime.now()
+
+    if text in ("today", "t"):
+        return today.strftime("%Y-%m-%d")
+    if text in ("yesterday", "y"):
+        from datetime import timedelta
+        return (today - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m", "%d-%m"):
+        try:
+            d = datetime.strptime(text, fmt)
+            # If no year provided, assume current year
+            if fmt in ("%d/%m", "%d-%m"):
+                d = d.replace(year=today.year)
+            return d.strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return None
+
 async def add_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    today = datetime.now().strftime("%Y-%m-%d")
     keyboard = [[t] for t in TYPES]
     await update.message.reply_text(
-        "📂 *Step 1 of 4* — Choose the transaction type:",
+        "📂 *Step 1 of 5* — Choose the transaction type:",
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True),
         parse_mode="Markdown"
     )
@@ -398,7 +421,7 @@ async def choose_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ctx.user_data["type"] = chosen
     keyboard = [[c] for c in CATEGORIES[chosen]]
     await update.message.reply_text(
-        f"🏷 *Step 2 of 4* — Choose category under _{chosen}_:",
+        f"🏷 *Step 2 of 5* — Choose category under _{chosen}_:",
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True),
         parse_mode="Markdown"
     )
@@ -412,7 +435,7 @@ async def choose_category(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return CHOOSE_CATEGORY
     ctx.user_data["category"] = chosen
     await update.message.reply_text(
-        "💰 *Step 3 of 4* — Enter the amount (e.g. `45.50`):",
+        "💰 *Step 3 of 5* — Enter the amount (e.g. `45.50`):",
         reply_markup=ReplyKeyboardRemove(),
         parse_mode="Markdown"
     )
@@ -425,7 +448,7 @@ async def enter_amount(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return ENTER_AMOUNT
     ctx.user_data["amount"] = amount
     await update.message.reply_text(
-        "📝 *Step 4 of 4* — Any details or notes?\n_(Send `-` to skip)_",
+        "📝 *Step 4 of 5* — Any details or notes?\n_(Send `-` to skip)_",
         parse_mode="Markdown"
     )
     return ENTER_DETAILS
@@ -434,20 +457,44 @@ async def enter_details(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     details = update.message.text.strip()
     if details == "-":
         details = ""
-    date = datetime.now().strftime("%Y-%m-%d")
+    ctx.user_data["details"] = details
+    today = datetime.now().strftime("%Y-%m-%d")
+    keyboard = [["Today"], ["Yesterday"]]
+    await update.message.reply_text(
+        f"📅 *Step 5 of 5* — Date for this transaction?\n"
+        f"_(Tap Today/Yesterday or type: `DD/MM`, `DD/MM/YYYY`, `YYYY-MM-DD`)_",
+        reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True),
+        parse_mode="Markdown"
+    )
+    return ENTER_DATE
+
+async def enter_date(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    date = parse_date_input(update.message.text)
+    if date is None:
+        await update.message.reply_text(
+            "❓ Couldn't parse that date. Try: `Today`, `Yesterday`, `22/02`, `22/02/2025` or `2025-02-22`:",
+            reply_markup=ReplyKeyboardMarkup([["Today"], ["Yesterday"]], one_time_keyboard=True, resize_keyboard=True),
+            parse_mode="Markdown"
+        )
+        return ENTER_DATE
+
     type_ = ctx.user_data["type"]
     category = ctx.user_data["category"]
     amount = ctx.user_data["amount"]
+    details = ctx.user_data["details"]
     try:
         append_transaction(date, type_, category, amount, details)
         await update.message.reply_text(
             f"✅ *Logged to Transactions Log!*\n\n"
             f"📅 {date}\n📂 {type_}\n🏷 {category}\n💰 ${amount:,.2f}\n📝 {details or '—'}",
+            reply_markup=ReplyKeyboardRemove(),
             parse_mode="Markdown"
         )
     except Exception as e:
         logger.error(f"Sheet write error: {e}")
-        await update.message.reply_text("❌ Failed to write to Google Sheets.")
+        await update.message.reply_text("❌ Failed to write to Google Sheets.", reply_markup=ReplyKeyboardRemove())
+    ctx.user_data.clear()
+    return ConversationHandler.END
     ctx.user_data.clear()
     return ConversationHandler.END
 
@@ -501,6 +548,7 @@ def build_app():
             CHOOSE_CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_category)],
             ENTER_AMOUNT:    [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_amount)],
             ENTER_DETAILS:   [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_details)],
+            ENTER_DATE:      [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_date)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
