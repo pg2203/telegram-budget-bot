@@ -509,52 +509,15 @@ def build_app():
     return app
 
 
-# ── Webhook mode (Render / cloud) ─────────────────────────────────────────────
-async def run_webhook(app):
-    webhook_url = os.environ["WEBHOOK_URL"]  # e.g. https://your-app.onrender.com
-    port = int(os.environ.get("PORT", 10000))  # Render uses 10000 by default
-    logger.info(f"🌐 Webhook mode — url={webhook_url}, port={port}")
-
-    await app.initialize()
-    await app.start()
-    await app.updater.start_webhook(
-        listen="0.0.0.0",
-        port=port,
-        url_path="/webhook",
-        webhook_url=f"{webhook_url}/webhook",
-        allowed_updates=Update.ALL_TYPES,
-    )
-    logger.info(f"✅ Webhook listening on port {port}")
-
-    # Keep running until interrupted
-    await asyncio.Event().wait()
-
-    await app.updater.stop()
-    await app.stop()
-    await app.shutdown()
-
-
-# ── Polling mode (local dev) ───────────────────────────────────────────────────
+# ── Polling mode (local + Render) ────────────────────────────────────────────
 async def run_polling(app):
-    import time
-    logger.info("💻 Polling mode (local dev)")
-    logger.info("⚠️  Make sure Render (or any other instance) is SUSPENDED before running locally.")
-    logger.info("    Render dashboard → your service → 'Suspend Service'")
-
+    logger.info("🤖 Bot starting (polling mode)...")
     async with app:
         await app.initialize()
-
-        # Delete webhook and wait a moment to let any other polling instance time out
         await app.bot.delete_webhook(drop_pending_updates=True)
-        logger.info("✅ Webhook cleared. Waiting 5s for other instances to time out...")
-        await asyncio.sleep(5)
-
         await app.start()
-        await app.updater.start_polling(
-            allowed_updates=Update.ALL_TYPES,
-            error_callback=lambda e: logger.error(f"Polling error: {e}")
-        )
-        logger.info("✅ Polling started successfully.")
+        await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+        logger.info("✅ Bot is running. Press Ctrl+C to stop.")
         await asyncio.Event().wait()
         await app.updater.stop()
         await app.stop()
@@ -562,9 +525,4 @@ async def run_polling(app):
 
 if __name__ == "__main__":
     application = build_app()
-    # Use webhook when WEBHOOK_URL env var is set (i.e. on Render),
-    # otherwise fall back to polling (local development).
-    if os.environ.get("WEBHOOK_URL"):
-        asyncio.run(run_webhook(application))
-    else:
-        asyncio.run(run_polling(application))
+    asyncio.run(run_polling(application))

@@ -1,13 +1,11 @@
 services:
-  - type: web                      # web service so Render assigns a public URL + PORT
+  - type: worker
     name: telegram-budget-bot
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
     envVars:
       - key: TELEGRAM_BOT_TOKEN
-        sync: false                # set manually in Render dashboard
+        sync: false
       - key: GOOGLE_SHEET_NAME
-        sync: false                # exact name of your Google Sheet
-      - key: WEBHOOK_URL
-        sync: false                # set to your Render URL, e.g. https://telegram-budget-bot.onrender.com
+        sync: false
