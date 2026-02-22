@@ -1,0 +1,11 @@
+services:
+  - type: worker
+    name: telegram-budget-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false          # you'll set this in Render dashboard
+      - key: GOOGLE_SHEET_NAME
+        sync: false          # exact name of your Google Sheet
