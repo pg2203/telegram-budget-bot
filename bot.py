@@ -8,8 +8,9 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler, ConversationHandler,
     filters, ContextTypes
 )
+import json
 import gspread
-from google.oauth2.service_account import Credentials
+from google.oauth2.service_account import Credentials, service_account
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -53,12 +54,22 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
+
+def load_credentials():
+    """Load Google credentials from env var (Railway/cloud) or file (local)."""
+    creds_json = os.environ.get("CREDENTIALS_JSON")
+    if creds_json:
+        logger.info("🔐 Loading credentials from CREDENTIALS_JSON env var...")
+        info = json.loads(creds_json)
+        return Credentials.from_service_account_info(info, scopes=SCOPES)
+    else:
+        logger.info("🔐 Loading credentials from credentials.json file...")
+        return Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
 WORKSHEET_NAME = "Transactions Log"
 HEADER_ROW = 4
 
 def get_sheet():
-    logger.info("🔐 Loading credentials from credentials.json...")
-    creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+    creds = load_credentials()
     logger.info(f"✅ Credentials loaded. Service account: {creds.service_account_email}")
 
     logger.info("🔗 Authorizing gspread client...")
@@ -117,7 +128,7 @@ def append_transaction(date, type_, category, amount, details):
 def get_budget_sheet():
     """Open the Budget worksheet."""
     logger.info("🔐 Loading credentials for Budget sheet...")
-    creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+    creds = load_credentials()
     client = gspread.authorize(creds)
     wb = client.open(os.environ["GOOGLE_SHEET_NAME"])
     ws = wb.worksheet("Budget")
@@ -570,7 +581,11 @@ async def run_polling(app):
         await app.initialize()
         await app.bot.delete_webhook(drop_pending_updates=True)
         await app.start()
-        await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+        await app.updater.start_polling(
+            allowed_updates=Update.ALL_TYPES,
+            poll_interval=1.0,     # seconds between polls
+            timeout=30,            # long-poll: hold connection 30s before retry
+        )
         logger.info("✅ Bot is running. Press Ctrl+C to stop.")
         await asyncio.Event().wait()
         await app.updater.stop()
