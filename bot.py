@@ -512,20 +512,26 @@ def build_app():
 # ── Webhook mode (Render / cloud) ─────────────────────────────────────────────
 async def run_webhook(app):
     webhook_url = os.environ["WEBHOOK_URL"]  # e.g. https://your-app.onrender.com
-    port = int(os.environ.get("PORT", 8443))
+    port = int(os.environ.get("PORT", 10000))  # Render uses 10000 by default
     logger.info(f"🌐 Webhook mode — url={webhook_url}, port={port}")
-    async with app:
-        await app.start()
-        await app.updater.start_webhook(
-            listen="0.0.0.0",
-            port=port,
-            url_path="/webhook",
-            webhook_url=f"{webhook_url}/webhook",
-            allowed_updates=Update.ALL_TYPES,
-        )
-        await asyncio.Event().wait()
-        await app.updater.stop()
-        await app.stop()
+
+    await app.initialize()
+    await app.start()
+    await app.updater.start_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path="/webhook",
+        webhook_url=f"{webhook_url}/webhook",
+        allowed_updates=Update.ALL_TYPES,
+    )
+    logger.info(f"✅ Webhook listening on port {port}")
+
+    # Keep running until interrupted
+    await asyncio.Event().wait()
+
+    await app.updater.stop()
+    await app.stop()
+    await app.shutdown()
 
 
 # ── Polling mode (local dev) ───────────────────────────────────────────────────
