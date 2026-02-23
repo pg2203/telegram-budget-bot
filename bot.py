@@ -581,34 +581,54 @@ def build_app():
 # ── Polling mode (local + Render) ────────────────────────────────────────────
 async def run_polling(app):
     from telegram.error import Conflict
+
+    async def _start():
+        await app.initialize()
+        await app.bot.delete_webhook(drop_pending_updates=True)
+        await asyncio.sleep(2)
+        await app.start()
+        await app.updater.start_polling(
+            allowed_updates=Update.ALL_TYPES,
+            poll_interval=1.0,
+            timeout=30,
+        )
+        logger.info("✅ Bot is running. Press Ctrl+C to stop.")
+        await asyncio.Event().wait()
+
     MAX_RETRIES = 10
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             logger.info(f"🤖 Bot starting (attempt {attempt}/{MAX_RETRIES})...")
-            async with app:
-                await app.initialize()
-                await app.bot.delete_webhook(drop_pending_updates=True)
-                await asyncio.sleep(2)  # brief pause after deleting webhook
-                await app.start()
-                await app.updater.start_polling(
-                    allowed_updates=Update.ALL_TYPES,
-                    poll_interval=1.0,
-                    timeout=30,
-                )
-                logger.info("✅ Bot is running.")
-                await asyncio.Event().wait()
-                await app.updater.stop()
-                await app.stop()
-            break  # clean exit, no retry needed
+            await _start()
+            break  # clean exit
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            logger.info("👋 Shutting down...")
+            break  # exit immediately, no retry
         except Conflict:
-            wait = attempt * 5  # 5s, 10s, 15s...
+            wait = attempt * 5
             logger.warning(f"⚠️  Conflict: another instance is running. Retrying in {wait}s...")
             await asyncio.sleep(wait)
+        except RuntimeError as e:
+            if "still running" in str(e):
+                logger.info("👋 Shutting down...")
+                break  # PTB cleanup edge case on Ctrl+C, exit cleanly
+            logger.error(f"❌ RuntimeError: {e}", exc_info=True)
+            await asyncio.sleep(5)
         except Exception as e:
             logger.error(f"❌ Unexpected error: {e}", exc_info=True)
             await asyncio.sleep(5)
     else:
-        logger.error("❌ Could not start after max retries. Is another instance still running?")
+        logger.error("❌ Could not start after max retries.")
+
+    # Clean shutdown regardless of how we got here
+    try:
+        if app.updater.running:
+            await app.updater.stop()
+        if app.running:
+            await app.stop()
+        await app.shutdown()
+    except Exception:
+        pass  # best effort
 
 
 if __name__ == "__main__":
