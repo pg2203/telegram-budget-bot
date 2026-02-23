@@ -60,7 +60,15 @@ def load_credentials():
     creds_json = os.environ.get("CREDENTIALS_JSON")
     if creds_json:
         logger.info("🔐 Loading credentials from CREDENTIALS_JSON env var...")
-        info = json.loads(creds_json)
+        try:
+            # Railway sometimes wraps the value in single quotes or escapes it
+            creds_json = creds_json.strip().strip("'")
+            info = json.loads(creds_json)
+        except json.JSONDecodeError:
+            # Try treating escaped newlines/quotes
+            import codecs
+            creds_json = codecs.decode(creds_json, 'unicode_escape')
+            info = json.loads(creds_json)
         return Credentials.from_service_account_info(info, scopes=SCOPES)
     else:
         logger.info("🔐 Loading credentials from credentials.json file...")
@@ -111,11 +119,7 @@ def append_transaction(date, type_, category, amount, details):
 
     row_data = [date, type_, category, float(amount), details]
     logger.info(f"📝 Row data: {row_data}")
-    result = sheet.update(
-        values=[row_data],
-        range_name=f"A{next_row}:E{next_row}",
-        value_input_option="USER_ENTERED"
-    )
+    result = sheet.update(f"A{next_row}:E{next_row}", [row_data], value_input_option="USER_ENTERED")
     logger.info(f"📤 sheet.update() result type={type(result).__name__}, value={result}")
     if isinstance(result, dict):
         updated = result.get("updatedCells", result.get("updated_cells", 0))
@@ -161,8 +165,8 @@ def get_summary(year: int, month: int, detailed: bool = False, compare: bool = F
         """Write month/year to Budget sheet, wait, then read all actuals."""
         mn = datetime(y, m, 1).strftime("%B")
         logger.info(f"✏️  Fetching actuals for {mn} {y}")
-        ws.update(values=[[mn]], range_name="C14")
-        ws.update(values=[[y]], range_name="C15")
+        ws.update("C14", [[mn]])
+        ws.update("C15", [[y]])
         time.sleep(3)
 
         summary_raw = ws.spreadsheet.values_get("'Budget'!B34:D39")
@@ -216,8 +220,8 @@ def get_summary(year: int, month: int, detailed: bool = False, compare: bool = F
         logger.info(f"📊 Fetching previous month: {prev_label}")
         prev_type_actuals, _, prev_cat_actuals = fetch_actuals(prev_y, prev_m)
         # Restore current month in sheet
-        ws.update(values=[[month_name_full]], range_name="C14")
-        ws.update(values=[[year]], range_name="C15")
+        ws.update("C14", [[month_name_full]])
+        ws.update("C15", [[year]])
 
     # Short summary
     if not detailed:
