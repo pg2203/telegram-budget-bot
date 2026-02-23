@@ -1,20 +1,70 @@
-# 💰 Telegram Budget Bot — Setup Guide
+# 💰 Telegram Budget Bot
 
-A Telegram bot that logs your expenses directly into Google Sheets.
+A Telegram bot that logs your expenses into your **Monthly_Budget_2025** Google Sheet and lets you query summaries by month.
 
 ---
 
 ## How it works
 
-You message your bot → it parses the expense → appends a row to your Google Sheet.
+- Message your bot to log a transaction → it appends a row to the **Transactions Log** sheet
+- Use `/summary` to pull computed totals directly from the **Budget** sheet (respects your SUMIFS formulas)
+- The bot writes the month/year into cells C14/C15 to trigger Google Sheets recalculation, then reads back the results
 
-**Supported formats:**
-- `/add Food 25.50 lunch with team`
-- `Coffee 4.50`
-- `45 Groceries weekly shop`
-- `/summary` — shows totals by category
+---
 
-**Sheet columns:** Date | Category | Amount | Description/Notes
+## Commands
+
+### Logging transactions
+
+| Format | Example |
+|--------|---------|
+| Guided flow | `/add` |
+| Free text | `Groceries 45.50` or `Dining out 32` |
+
+**`/add` — guided step-by-step (5 steps):**
+1. Choose type: Income / Fixed Expenses / Variable Expenses / Savings / Debts
+2. Choose category (e.g. Groceries, Internet, Karate...)
+3. Enter amount (e.g. `45.50`)
+4. Enter details/notes (or `-` to skip)
+5. Enter date — tap **Today** / **Yesterday**, or type:
+   - `22/02` — 22 Feb of current year
+   - `22/02/2025` — specific date
+   - `2025-02-22` — ISO format
+
+### Summary
+
+| Command | Result |
+|---------|--------|
+| `/summary` | Current month, short view |
+| `/summary full` | Current month, full category breakdown |
+| `/summary compare` | Current month vs previous month |
+| `/summary full compare` | Full breakdown with month-over-month comparison |
+| `/summary 2025 11` | November 2025, short |
+| `/summary 2025 11 full` | November 2025, full breakdown |
+| `/summary Nov 2025 compare` | November 2025 vs October 2025 |
+
+**Short summary shows:**
+- Each type total (Income, Fixed Expenses, Variable Expenses, Savings, Debts)
+- Total Expenses (all types except Income)
+- Balance (only shown when Income > $0)
+- 🔺 / 🔻 arrows when using `compare`
+
+### Other commands
+
+| Command | Description |
+|---------|-------------|
+| `/categories` | List all available categories |
+| `/cancel` | Cancel the current `/add` flow |
+| `/help` | Show help message |
+
+---
+
+## Sheet structure expected
+
+Your Google Sheet should have:
+- **Transactions Log** worksheet with header row: `DATE | TYPE | CATEGORY | AMOUNT | DETAILS`
+- **Budget** worksheet with month selector in `C14` (month name) and `C15` (year)
+- **Setup** worksheet listing categories under Income / Fixed Expenses / Variable Expenses / Savings / Debts
 
 ---
 
@@ -40,20 +90,19 @@ You message your bot → it parses the expense → appends a row to your Google 
 ### 2c. Create a Service Account
 1. Go to **APIs & Services → Credentials**
 2. Click **Create Credentials → Service Account**
-3. Give it any name (e.g. "budget-bot")
-4. Click **Done** (no roles needed)
-5. Click on the service account → **Keys tab → Add Key → JSON**
-6. Download the JSON file → rename it to **`credentials.json`**
-7. Place `credentials.json` in the same folder as `bot.py`
+3. Give it any name (e.g. "budget-bot"), click **Done**
+4. Click on the service account → **Keys tab → Add Key → JSON**
+5. Download the JSON file → save it as **`credentials.json`**
 
 ### 2d. Share your Google Sheet
-1. Create a new Google Sheet (e.g. named `Budget 2025`)
-2. Open `credentials.json` and copy the `client_email` value
-3. In your Sheet, click **Share** and share with that email (Editor access)
+1. Open `credentials.json` and copy the `client_email` value
+2. In your Google Sheet, click **Share** and share with that email (Editor access)
 
 ---
 
-## Step 3 — Deploy to Render (free)
+## Step 3 — Deploy to Railway (free)
+
+Railway gives $5 free credit/month. This bot uses ~$0.50/month — effectively free.
 
 ### 3a. Push code to GitHub
 ```bash
@@ -61,60 +110,50 @@ cd telegram-budget-bot
 git init
 git add .
 git commit -m "Initial commit"
-# Create a repo on github.com, then:
 git remote add origin https://github.com/YOUR_USERNAME/telegram-budget-bot.git
 git push -u origin main
 ```
 
-> ⚠️ Make sure `credentials.json` is in `.gitignore` (it already is).
-> You'll upload it to Render separately.
+> ⚠️ `credentials.json` is in `.gitignore` — never commit it. Use the env var instead (see below).
 
-### 3b. Create a Render Web Service
-1. Go to https://render.com and sign up (free)
-2. Click **New → Background Worker**
-3. Connect your GitHub repo
-4. Set **Build Command:** `pip install -r requirements.txt`
-5. Set **Start Command:** `python bot.py`
+### 3b. Create a Railway project
+1. Go to https://railway.app and sign up with GitHub
+2. Click **New Project → Deploy from GitHub repo**
+3. Select your `telegram-budget-bot` repo
+4. Railway auto-detects Python and deploys automatically
 
-### 3c. Add Environment Variables in Render dashboard
+### 3c. Add environment variables
+In Railway → your service → **Variables** tab, add:
+
 | Key | Value |
 |-----|-------|
 | `TELEGRAM_BOT_TOKEN` | Your token from BotFather |
 | `GOOGLE_SHEET_NAME` | Exact name of your Google Sheet |
+| `CREDENTIALS_JSON` | Contents of credentials.json (see below) |
 
-### 3d. Upload credentials.json as a Secret File
-1. In Render → your service → **Environment** tab
-2. Under **Secret Files**, add a file:
-   - Filename: `credentials.json`
-   - Contents: paste the full contents of your `credentials.json`
-
-### 3e. Deploy!
-Click **Deploy** — Render will build and start your bot.
+**To get a safe single-line value for `CREDENTIALS_JSON`, run this locally:**
+```bash
+cat credentials.json | python3 -c "import json,sys; print(json.dumps(json.load(sys.stdin)))"
+```
+Paste the output as the value — no wrapping quotes needed.
 
 ---
 
-## Testing
-
-Open Telegram, find your bot, and try:
-```
-/start
-Coffee 4.50
-/add Groceries 67.30 weekly shop
-/summary
-```
-
-Check your Google Sheet — rows should appear instantly! ✅
-
----
-
-## Local testing (optional)
+## Local development
 
 ```bash
 pip install -r requirements.txt
 export TELEGRAM_BOT_TOKEN="your_token_here"
-export GOOGLE_SHEET_NAME="Budget 2025"
+export GOOGLE_SHEET_NAME="Monthly_Budget_2025"
+# credentials.json must be in the same folder
 python bot.py
 ```
+
+> ⚠️ **Before running locally**, suspend your Railway deployment to avoid conflicts.
+> Two instances polling Telegram at the same time causes a 409 Conflict error.
+>
+> Railway dashboard → your service → **Settings → Suspend**
+> Resume it when you're done testing locally.
 
 ---
 
@@ -122,7 +161,10 @@ python bot.py
 
 | Problem | Fix |
 |---------|-----|
-| Bot doesn't respond | Check Render logs for errors |
-| Sheet not found | Make sure `GOOGLE_SHEET_NAME` matches exactly |
-| Permission denied | Re-share the Sheet with the service account email |
-| credentials.json not found | Add it as a Secret File in Render |
+| `409 Conflict` error | Another instance is running — suspend Railway before running locally |
+| Bot doesn't respond | Check Railway logs for errors |
+| Sheet not found | `GOOGLE_SHEET_NAME` must match exactly (case-sensitive) |
+| Permission denied on sheet | Re-share the Sheet with the service account `client_email` |
+| `JSONDecodeError` on credentials | Re-generate `CREDENTIALS_JSON` using the python command above |
+| Summary shows $0 for all | Check that C14/C15 cells in the Budget sheet are not protected |
+| `No transactions found` | Dates in Transactions Log must be in `YYYY-MM-DD` format |
