@@ -233,6 +233,8 @@ def get_summary(year: int, month: int, detailed: bool = False, compare: bool = F
             if prev == 0:
                 return ""
             d = curr - prev
+            if d == 0:
+                return ""
             arrow = "🔺" if d > 0 else "🔻"
             return f" {arrow} ${fmt(abs(d))}"
 
@@ -266,6 +268,8 @@ def get_summary(year: int, month: int, detailed: bool = False, compare: bool = F
         if prev == 0:
             return ""
         d = curr - prev
+        if d == 0:
+            return ""
         arrow = "🔺" if d > 0 else "🔻"
         return f" {arrow} ${fmt(abs(d))}"
 
