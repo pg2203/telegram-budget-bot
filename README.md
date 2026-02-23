@@ -1,6 +1,6 @@
 # 💰 Telegram Budget Bot
 
-A Telegram bot that logs your expenses into your **Monthly_Budget_2025** Google Sheet and lets you query summaries by month.
+A Telegram bot that logs your expenses into your **Monthly Budget** Google Sheet and lets you query summaries by month.
 
 ---
 
@@ -16,12 +16,13 @@ A Telegram bot that logs your expenses into your **Monthly_Budget_2025** Google 
 
 ### Logging transactions
 
-| Format | Example |
-|--------|---------|
-| Guided flow | `/add` |
-| Free text | `Groceries 45.50` or `Dining out 32` |
+| Format      | Example                              |
+| ----------- | ------------------------------------ |
+| Guided flow | `/add`                               |
+| Free text   | `Groceries 45.50` or `Dining out 32` |
 
 **`/add` — guided step-by-step (5 steps):**
+
 1. Choose type: Income / Fixed Expenses / Variable Expenses / Savings / Debts
 2. Choose category (e.g. Groceries, Internet, Karate...)
 3. Enter amount (e.g. `45.50`)
@@ -33,17 +34,18 @@ A Telegram bot that logs your expenses into your **Monthly_Budget_2025** Google 
 
 ### Summary
 
-| Command | Result |
-|---------|--------|
-| `/summary` | Current month, short view |
-| `/summary full` | Current month, full category breakdown |
-| `/summary compare` | Current month vs previous month |
-| `/summary full compare` | Full breakdown with month-over-month comparison |
-| `/summary 2025 11` | November 2025, short |
-| `/summary 2025 11 full` | November 2025, full breakdown |
-| `/summary Nov 2025 compare` | November 2025 vs October 2025 |
+| Command                     | Result                                          |
+| --------------------------- | ----------------------------------------------- |
+| `/summary`                  | Current month, short view                       |
+| `/summary full`             | Current month, full category breakdown          |
+| `/summary compare`          | Current month vs previous month                 |
+| `/summary full compare`     | Full breakdown with month-over-month comparison |
+| `/summary 2025 11`          | November 2025, short                            |
+| `/summary 2025 11 full`     | November 2025, full breakdown                   |
+| `/summary Nov 2025 compare` | November 2025 vs October 2025                   |
 
 **Short summary shows:**
+
 - Each type total (Income, Fixed Expenses, Variable Expenses, Savings, Debts)
 - Total Expenses (all types except Income)
 - Balance (only shown when Income > $0)
@@ -51,17 +53,18 @@ A Telegram bot that logs your expenses into your **Monthly_Budget_2025** Google 
 
 ### Other commands
 
-| Command | Description |
-|---------|-------------|
-| `/categories` | List all available categories |
-| `/cancel` | Cancel the current `/add` flow |
-| `/help` | Show help message |
+| Command       | Description                    |
+| ------------- | ------------------------------ |
+| `/categories` | List all available categories  |
+| `/cancel`     | Cancel the current `/add` flow |
+| `/help`       | Show help message              |
 
 ---
 
 ## Sheet structure expected
 
 Your Google Sheet should have:
+
 - **Transactions Log** worksheet with header row: `DATE | TYPE | CATEGORY | AMOUNT | DETAILS`
 - **Budget** worksheet with month selector in `C14` (month name) and `C15` (year)
 - **Setup** worksheet listing categories under Income / Fixed Expenses / Variable Expenses / Savings / Debts
@@ -79,15 +82,18 @@ Your Google Sheet should have:
 ## Step 2 — Set up Google Sheets API
 
 ### 2a. Create a Google Cloud project
+
 1. Go to https://console.cloud.google.com
 2. Create a new project (e.g. "Budget Bot")
 
 ### 2b. Enable APIs
+
 1. Go to **APIs & Services → Library**
 2. Enable **Google Sheets API**
 3. Enable **Google Drive API**
 
 ### 2c. Create a Service Account
+
 1. Go to **APIs & Services → Credentials**
 2. Click **Create Credentials → Service Account**
 3. Give it any name (e.g. "budget-bot"), click **Done**
@@ -95,6 +101,7 @@ Your Google Sheet should have:
 5. Download the JSON file → save it as **`credentials.json`**
 
 ### 2d. Share your Google Sheet
+
 1. Open `credentials.json` and copy the `client_email` value
 2. In your Google Sheet, click **Share** and share with that email (Editor access)
 
@@ -105,6 +112,7 @@ Your Google Sheet should have:
 Railway gives $5 free credit/month. This bot uses ~$0.50/month — effectively free.
 
 ### 3a. Push code to GitHub
+
 ```bash
 cd telegram-budget-bot
 git init
@@ -117,24 +125,28 @@ git push -u origin main
 > ⚠️ `credentials.json` is in `.gitignore` — never commit it. Use the env var instead (see below).
 
 ### 3b. Create a Railway project
+
 1. Go to https://railway.app and sign up with GitHub
 2. Click **New Project → Deploy from GitHub repo**
 3. Select your `telegram-budget-bot` repo
 4. Railway auto-detects Python and deploys automatically
 
 ### 3c. Add environment variables
+
 In Railway → your service → **Variables** tab, add:
 
-| Key | Value |
-|-----|-------|
-| `TELEGRAM_BOT_TOKEN` | Your token from BotFather |
-| `GOOGLE_SHEET_NAME` | Exact name of your Google Sheet |
-| `CREDENTIALS_JSON` | Contents of credentials.json (see below) |
+| Key                  | Value                                    |
+| -------------------- | ---------------------------------------- |
+| `TELEGRAM_BOT_TOKEN` | Your token from BotFather                |
+| `GOOGLE_SHEET_NAME`  | Exact name of your Google Sheet          |
+| `CREDENTIALS_JSON`   | Contents of credentials.json (see below) |
 
 **To get a safe single-line value for `CREDENTIALS_JSON`, run this locally:**
+
 ```bash
 cat credentials.json | python3 -c "import json,sys; print(json.dumps(json.load(sys.stdin)))"
 ```
+
 Paste the output as the value — no wrapping quotes needed.
 
 ---
@@ -159,12 +171,12 @@ python bot.py
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---------|-----|
-| `409 Conflict` error | Another instance is running — suspend Railway before running locally |
-| Bot doesn't respond | Check Railway logs for errors |
-| Sheet not found | `GOOGLE_SHEET_NAME` must match exactly (case-sensitive) |
-| Permission denied on sheet | Re-share the Sheet with the service account `client_email` |
-| `JSONDecodeError` on credentials | Re-generate `CREDENTIALS_JSON` using the python command above |
-| Summary shows $0 for all | Check that C14/C15 cells in the Budget sheet are not protected |
-| `No transactions found` | Dates in Transactions Log must be in `YYYY-MM-DD` format |
+| Problem                          | Fix                                                                  |
+| -------------------------------- | -------------------------------------------------------------------- |
+| `409 Conflict` error             | Another instance is running — suspend Railway before running locally |
+| Bot doesn't respond              | Check Railway logs for errors                                        |
+| Sheet not found                  | `GOOGLE_SHEET_NAME` must match exactly (case-sensitive)              |
+| Permission denied on sheet       | Re-share the Sheet with the service account `client_email`           |
+| `JSONDecodeError` on credentials | Re-generate `CREDENTIALS_JSON` using the python command above        |
+| Summary shows $0 for all         | Check that C14/C15 cells in the Budget sheet are not protected       |
+| `No transactions found`          | Dates in Transactions Log must be in `YYYY-MM-DD` format             |
