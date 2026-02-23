@@ -119,7 +119,7 @@ def append_transaction(date, type_, category, amount, details):
 
     row_data = [date, type_, category, float(amount), details]
     logger.info(f"📝 Row data: {row_data}")
-    result = sheet.update(f"A{next_row}:E{next_row}", [row_data], value_input_option="USER_ENTERED")
+    result = sheet.update(values=[row_data], range_name=f"A{next_row}:E{next_row}", value_input_option="USER_ENTERED")
     logger.info(f"📤 sheet.update() result type={type(result).__name__}, value={result}")
     if isinstance(result, dict):
         updated = result.get("updatedCells", result.get("updated_cells", 0))
@@ -165,8 +165,8 @@ def get_summary(year: int, month: int, detailed: bool = False, compare: bool = F
         """Write month/year to Budget sheet, wait, then read all actuals."""
         mn = datetime(y, m, 1).strftime("%B")
         logger.info(f"✏️  Fetching actuals for {mn} {y}")
-        ws.update("C14", [[mn]])
-        ws.update("C15", [[y]])
+        ws.update(values=[[mn]], range_name="C14")
+        ws.update(values=[[y]], range_name="C15")
         time.sleep(3)
 
         summary_raw = ws.spreadsheet.values_get("'Budget'!B34:D39")
@@ -220,8 +220,8 @@ def get_summary(year: int, month: int, detailed: bool = False, compare: bool = F
         logger.info(f"📊 Fetching previous month: {prev_label}")
         prev_type_actuals, _, prev_cat_actuals = fetch_actuals(prev_y, prev_m)
         # Restore current month in sheet
-        ws.update("C14", [[month_name_full]])
-        ws.update("C15", [[year]])
+        ws.update(values=[[month_name_full]], range_name="C14")
+        ws.update(values=[[year]], range_name="C15")
 
     # Short summary
     if not detailed:
@@ -580,20 +580,35 @@ def build_app():
 
 # ── Polling mode (local + Render) ────────────────────────────────────────────
 async def run_polling(app):
-    logger.info("🤖 Bot starting (polling mode)...")
-    async with app:
-        await app.initialize()
-        await app.bot.delete_webhook(drop_pending_updates=True)
-        await app.start()
-        await app.updater.start_polling(
-            allowed_updates=Update.ALL_TYPES,
-            poll_interval=1.0,     # seconds between polls
-            timeout=30,            # long-poll: hold connection 30s before retry
-        )
-        logger.info("✅ Bot is running. Press Ctrl+C to stop.")
-        await asyncio.Event().wait()
-        await app.updater.stop()
-        await app.stop()
+    from telegram.error import Conflict
+    MAX_RETRIES = 10
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            logger.info(f"🤖 Bot starting (attempt {attempt}/{MAX_RETRIES})...")
+            async with app:
+                await app.initialize()
+                await app.bot.delete_webhook(drop_pending_updates=True)
+                await asyncio.sleep(2)  # brief pause after deleting webhook
+                await app.start()
+                await app.updater.start_polling(
+                    allowed_updates=Update.ALL_TYPES,
+                    poll_interval=1.0,
+                    timeout=30,
+                )
+                logger.info("✅ Bot is running.")
+                await asyncio.Event().wait()
+                await app.updater.stop()
+                await app.stop()
+            break  # clean exit, no retry needed
+        except Conflict:
+            wait = attempt * 5  # 5s, 10s, 15s...
+            logger.warning(f"⚠️  Conflict: another instance is running. Retrying in {wait}s...")
+            await asyncio.sleep(wait)
+        except Exception as e:
+            logger.error(f"❌ Unexpected error: {e}", exc_info=True)
+            await asyncio.sleep(5)
+    else:
+        logger.error("❌ Could not start after max retries. Is another instance still running?")
 
 
 if __name__ == "__main__":
