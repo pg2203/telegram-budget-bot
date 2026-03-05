@@ -597,59 +597,28 @@ def build_app():
 
 
 # ── Polling mode (local + Render) ────────────────────────────────────────────
-async def run_polling(app):
+if __name__ == "__main__":
     from telegram.error import Conflict
-
-    async def _start():
-        await app.initialize()
-        await app.bot.delete_webhook(drop_pending_updates=True)
-        await asyncio.sleep(2)
-        await app.start()
-        await app.updater.start_polling(
-            allowed_updates=Update.ALL_TYPES,
-            poll_interval=1.0,
-            timeout=30,
-        )
-        logger.info("✅ Bot is running. Press Ctrl+C to stop.")
-        # Use idle() instead of asyncio.Event() for Python 3.8 compatibility
-        await app.updater.idle()
+    import time
 
     MAX_RETRIES = 10
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             logger.info(f"🤖 Bot starting (attempt {attempt}/{MAX_RETRIES})...")
-            await _start()
+            app = build_app()
+            app.run_polling(
+                allowed_updates=Update.ALL_TYPES,
+                poll_interval=1.0,
+                timeout=30,
+                drop_pending_updates=True,
+            )
             break  # clean exit
-        except (KeyboardInterrupt, asyncio.CancelledError):
-            logger.info("👋 Shutting down...")
-            break  # exit immediately, no retry
         except Conflict:
             wait = attempt * 5
-            logger.warning(f"⚠️  Conflict: another instance is running. Retrying in {wait}s...")
-            await asyncio.sleep(wait)
-        except RuntimeError as e:
-            if "still running" in str(e):
-                logger.info("👋 Shutting down...")
-                break  # PTB cleanup edge case on Ctrl+C, exit cleanly
-            logger.error(f"❌ RuntimeError: {e}", exc_info=True)
-            await asyncio.sleep(5)
+            logger.warning(f"⚠️  Conflict: another instance running. Retrying in {wait}s...")
+            time.sleep(wait)
         except Exception as e:
-            logger.error(f"❌ Unexpected error: {e}", exc_info=True)
-            await asyncio.sleep(5)
+            logger.error(f"❌ Error: {e}", exc_info=True)
+            time.sleep(5)
     else:
         logger.error("❌ Could not start after max retries.")
-
-    # Clean shutdown regardless of how we got here
-    try:
-        if app.updater.running:
-            await app.updater.stop()
-        if app.running:
-            await app.stop()
-        await app.shutdown()
-    except Exception:
-        pass  # best effort
-
-
-if __name__ == "__main__":
-    application = build_app()
-    asyncio.run(run_polling(application))
