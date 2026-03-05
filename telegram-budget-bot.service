@@ -1,0 +1,21 @@
+[Unit]
+Description=Telegram Budget Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/telegram-budget-bot
+ExecStart=/home/ubuntu/telegram-budget-bot/venv/bin/python bot.py
+Restart=always
+RestartSec=10
+
+# Environment variables — fill these in
+Environment="TELEGRAM_BOT_TOKEN=your_token_here"
+Environment="GOOGLE_SHEET_NAME=your_sheet_name_here"
+Environment="TZ=America/Toronto"
+# For CREDENTIALS_JSON: paste the single-line JSON value below
+Environment="CREDENTIALS_JSON={}"
+
+[Install]
+WantedBy=multi-user.target
