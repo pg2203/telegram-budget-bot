@@ -3,6 +3,7 @@ import re
 import logging
 import asyncio
 from datetime import datetime
+import zoneinfo
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, ConversationHandler,
@@ -18,6 +19,16 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+def now_local():
+    """Return current datetime in the configured local timezone (default: America/Toronto)."""
+    tz_name = os.environ.get("TZ", "America/Toronto")
+    try:
+        tz = zoneinfo.ZoneInfo(tz_name)
+    except Exception:
+        logger.warning(f"⚠️  Unknown timezone '{tz_name}', falling back to America/Toronto")
+        tz = zoneinfo.ZoneInfo("America/Toronto")
+    return datetime.now(tz)
 
 # ── Your sheet's categories (from Setup sheet) ────────────────────────────────
 CATEGORIES = {
@@ -343,7 +354,7 @@ async def summary_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
       /summary 2025 11 detailed → November 2025, full breakdown
       /summary Nov 2025         → November 2025, short
     """
-    now = datetime.now()
+    now = now_local()
     year, month = now.year, now.month
     detailed = False
 
@@ -403,7 +414,7 @@ async def summary_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 def parse_date_input(text: str):
     """Parse user date input. Accepts: today, yesterday, DD/MM, DD/MM/YYYY, YYYY-MM-DD."""
     text = text.strip().lower()
-    today = datetime.now()
+    today = now_local()
 
     if text in ("today", "t"):
         return today.strftime("%Y-%m-%d")
@@ -423,7 +434,7 @@ def parse_date_input(text: str):
     return None
 
 async def add_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = now_local().strftime("%Y-%m-%d")
     keyboard = [[t] for t in TYPES]
     await update.message.reply_text(
         "📂 *Step 1 of 5* — Choose the transaction type:",
@@ -477,7 +488,7 @@ async def enter_details(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if details == "-":
         details = ""
     ctx.user_data["details"] = details
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = now_local().strftime("%Y-%m-%d")
     keyboard = [["Today"], ["Yesterday"]]
     await update.message.reply_text(
         f"📅 *Step 5 of 5* — Date for this transaction?\n"
@@ -541,7 +552,7 @@ async def free_text_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "❓ Couldn't match a category. Try `Groceries 45.50` or use /add.\nSend /categories to see all options."
         )
         return
-    date = datetime.now().strftime("%Y-%m-%d")
+    date = now_local().strftime("%Y-%m-%d")
     details = re.sub(r"\d+(?:[.,]\d{1,2})?", "", text).replace(category, "").strip(" -")
     try:
         append_transaction(date, type_, category, amount, details)
