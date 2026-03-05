@@ -611,7 +611,8 @@ async def run_polling(app):
             timeout=30,
         )
         logger.info("✅ Bot is running. Press Ctrl+C to stop.")
-        await asyncio.Event().wait()
+        # Use idle() instead of asyncio.Event() for Python 3.8 compatibility
+        await app.updater.idle()
 
     MAX_RETRIES = 10
     for attempt in range(1, MAX_RETRIES + 1):
