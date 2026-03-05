@@ -3,7 +3,10 @@ import re
 import logging
 import asyncio
 from datetime import datetime
-import zoneinfo
+try:
+    import zoneinfo
+except ImportError:
+    from backports import zoneinfo
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, ConversationHandler,
