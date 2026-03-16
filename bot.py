@@ -536,6 +536,16 @@ async def cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Entry cancelled.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
+async def timeout_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Called automatically when conversation_timeout is reached."""
+    ctx.user_data.clear()
+    if update and update.effective_message:
+        await update.effective_message.reply_text(
+            "⏱ /add timed out after 5 minutes of inactivity. Use /add to start again.",
+            reply_markup=ReplyKeyboardRemove()
+        )
+    return ConversationHandler.END
+
 async def cancel_outside(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Handles /cancel when no conversation is active."""
     await update.message.reply_text("Nothing to cancel. Use /add to log an expense.", reply_markup=ReplyKeyboardRemove())
@@ -582,8 +592,13 @@ def build_app():
             ENTER_AMOUNT:    [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_amount)],
             ENTER_DETAILS:   [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_details)],
             ENTER_DATE:      [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_date)],
+            ConversationHandler.TIMEOUT: [MessageHandler(filters.ALL, timeout_handler)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            CommandHandler("add", add_cmd),   # restart if /add sent mid-flow
+        ],
+        conversation_timeout=300,  # auto-cancel after 5 minutes of inactivity
     )
 
     app.add_handler(CommandHandler("start", start))
